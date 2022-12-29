@@ -6,7 +6,7 @@ from django.conf.urls.static import static
 
 handler404 = 'core.views.page_not_found'
 handler500 = 'core.views.server_error'
-handler403 = 'core.views.permission_denied'
+handler403 = 'core.views.csrf_failure'
 
 urlpatterns = [
     path('', include('posts.urls', namespace='posts')),
