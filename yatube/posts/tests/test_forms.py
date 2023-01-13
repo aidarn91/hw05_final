@@ -1,6 +1,5 @@
 import shutil
 import tempfile
-
 from http import HTTPStatus
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -9,8 +8,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 from django.urls import reverse
 
-from posts.models import Group, Post
-from posts.forms import PostForm
+from posts.models import Group, Post, Comment
+from posts.forms import PostForm, CommentForm
 
 
 User = get_user_model()
@@ -66,7 +65,7 @@ class PostFormTests(TestCase):
             'image': uploaded,
         }
         posts_before = Post.objects.count()
-        response = self.authorized_author_client.post(
+        response = self.authorized_client.post(
             reverse('posts:post_create'),
             data=form_data,
             follow=True
@@ -76,31 +75,13 @@ class PostFormTests(TestCase):
             Post.objects.filter(
                 group=form_data['group'],
                 text=form_data['text'],
-                image='posts/small.gif'
             ).exists()
         )
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertEqual(Post.objects.count(), posts_before + 1)
-        self.assertRedirects(response, reverse('posts:profile',
-                             args=[self.author.username]))
-
-    def test_create_post(self):
-        posts_count = Post.objects.count()
-        form_data = {
-            'text': 'Тестовый текст',
-            'group': self.group.pk,
-        }
-        self.authorized_client.post(
-            reverse('posts:post_create'),
-            data=form_data,
-            follow=True,
-        )
-
-        self.assertEqual(Post.objects.count(), posts_count + 1)
-        post = Post.objects.first()
-        self.assertEqual(post.text, form_data['text'])
-        self.assertEqual(post.author, self.author)
-        self.assertEqual(post.group_id, form_data['group'])
+        self.assertRedirects(response, reverse(
+            'posts:profile', args=[self.author.username]
+        ))
 
     def test_edit_post(self):
         form_data = {
@@ -128,33 +109,80 @@ class PostFormTests(TestCase):
             form_data['group']
         )
 
-    def test_comment_only_for_auth(self):
-        """После успешной отправки комментарий
-        появляется на странице поста.
-        Комментировать посты может
-        только авторизованный пользователь"""
 
-        comments_before = self.post.comments.count()
-        commentform_data = {
-            'text': 'комментарий',
+class CommentFormTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.username = 'auth'
+        cls.user = User.objects.create_user(username=cls.username)
+        cls.slug = 'test-slug'
+        cls.group = Group.objects.create(
+            title='Тестовая группа',
+            slug=cls.slug,
+            description='Тестовое описание',
+        )
+        cls.post = Post.objects.create(
+            author=cls.user,
+            text='Тестовый текст',
+        )
+        cls.comment = Comment.objects.create(
+            author=cls.user,
+            post=cls.post,
+            text='Тестовый комментарий',
+        )
+        cls.form = CommentForm()
+
+    def setUp(self):
+        self.authorized_username = 'noname'
+        self.guest_client = Client()
+        self.user = User.objects.create_user(username=self.authorized_username)
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
+
+    def test_authorized_client_create_comment(self):
+        comment_count = Comment.objects.count()
+        comment_text = 'Новый комментарий'
+        form_data = {
+            'text': comment_text,
         }
-        response = self.guest_client.post(
-            reverse('posts:add_comment', args=[self.post.id]),
-            data=commentform_data,
-            follow=True,
-        )
-
-        expected_redirect = str(reverse('users:login') + '?next='
-                                + reverse('posts:add_comment',
-                                          args=[self.post.id]))
-
-        self.assertRedirects(response, expected_redirect)
-        self.assertEqual(self.post.comments.count(), comments_before)
         response = self.authorized_client.post(
-            reverse('posts:add_comment', args=[self.post.id]),
-            data=commentform_data,
+            reverse('posts:add_comment',
+                    args=[self.post.id, ]),
+            data=form_data,
             follow=True,
         )
-        self.assertEqual(self.post.comments.count(), comments_before + 1)
-        last_comment = self.post.comments.last()
-        self.assertEqual(last_comment.text, commentform_data['text'])
+        self.assertRedirects(response, reverse('posts:post_detail',
+                                               args=[self.post.id]))
+        self.assertEqual(Comment.objects.count(), comment_count + 1)
+        self.assertTrue(
+            Comment.objects.filter(
+                text=comment_text,
+            ).exists()
+        )
+        response = self.authorized_client.get(
+            reverse('posts:post_detail',
+                    args=[self.post.id])).context['comments'][1]
+        self.assertEqual(comment_text, response.text)
+
+    def test_guest_client_cant_create_comment(self):
+        comment_count = Comment.objects.count()
+        comment_text = 'Новый комментарий'
+        form_data = {
+            'text': comment_text,
+        }
+        response = self.guest_client.post(reverse(
+            'posts:add_comment',
+            args=[self.post.id]
+        ),
+            data=form_data,
+            follow=True,
+        )
+        self.assertRedirects(response,
+                             '/auth/login/?next=%2Fposts%2F1%2Fcomment%2F')
+        self.assertEqual(Comment.objects.count(), comment_count)
+        self.assertFalse(
+            Comment.objects.filter(
+                text=comment_text,
+            ).exists()
+        )

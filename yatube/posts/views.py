@@ -46,7 +46,7 @@ def profile(request, username):
 def post_detail(request, post_id):
     post = get_object_or_404(Post, pk=post_id)
     posts_count = Post.objects.filter(author=post.author).count
-    form = CommentForm(request.POST or None)
+    form = CommentForm()
     comments = post.comments.all()
     context = {
         'post': post,
@@ -142,6 +142,8 @@ def profile_unfollow(request, username):
     Метод отписки от автора.
     """
     author = get_object_or_404(User, username=username)
-    Follow.objects.filter(user=request.user,
-                          author=author).delete()
+    Follow.objects.filter(
+        user=request.user,
+        author=author
+    ).delete()
     return redirect('posts:follow_index')

@@ -113,10 +113,9 @@ class PostPagesTests(TestCase):
 
     def test_post_another_group(self):
         """Пост не попал в другую группу"""
-        response = self.authorized_client.get(
-            reverse('posts:group_list',
-                    kwargs={'slug': 'test_slug'}
-                    ))
+        response = self.authorized_client.get(reverse(
+            'posts:group_list', kwargs={'slug': 'test_slug'}
+        ))
         first_object = response.context['page_obj'][0]
         post_text_0 = first_object.text
         self.assertTrue(post_text_0, 'Тестовый текст')
@@ -144,8 +143,9 @@ class PostPagesTests(TestCase):
 
     def test_detail_page_show_correct_context(self):
         """Шаблон post_detail.html сформирован с правильным контекстом."""
-        response = self.authorized_client.get(
-            reverse('posts:post_detail', kwargs={'post_id': self.post.id}))
+        response = self.authorized_client.get(reverse(
+            'posts:post_detail', kwargs={'post_id': self.post.id}
+        ))
         first_object = response.context['post']
         post_author_0 = first_object.author.username
         post_text_0 = first_object.text
@@ -208,9 +208,11 @@ class CacheTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.post = Post.objects.create(
-            author=User.objects.create_user(username='test_name',
-                                            email='test@mail.ru',
-                                            password='test_pass',),
+            author=User.objects.create_user(
+                username='test_name',
+                email='test@mail.ru',
+                password='test_pass',
+            ),
             text='Тестовая запись для создания поста')
 
     def setUp(self):
@@ -257,10 +259,10 @@ class FollowViewsTest(TestCase):
     def test_follow_on_user(self):
         """Проверка подписки на пользователя."""
         count_follow = Follow.objects.count()
-        self.follower_client.post(
-            reverse(
-                'posts:profile_follow',
-                kwargs={'username': self.post_follower}))
+        self.follower_client.post(reverse(
+            'posts:profile_follow',
+            kwargs={'username': self.post_follower}
+        ))
         follow = Follow.objects.all().latest('id')
         self.assertEqual(Follow.objects.count(), count_follow + 1)
         self.assertEqual(follow.author_id, self.post_follower.id)
@@ -271,30 +273,38 @@ class FollowViewsTest(TestCase):
         Follow.objects.create(
             user=self.post_author,
             author=self.post_follower)
-        count_follow = Follow.objects.count()
-        self.follower_client.post(
-            reverse(
-                'posts:profile_unfollow',
-                kwargs={'username': self.post_follower}))
-        self.assertEqual(Follow.objects.count(), count_follow - 1)
+        self.follower_client.post(reverse(
+            'posts:profile_unfollow',
+            kwargs={'username': self.post_follower}
+        ))
+        self.assertIs(Follow.objects.filter(
+            user=self.post_author,
+            author=self.post_follower
+        ).exists(), False
+        )
 
     def test_follow_on_authors(self):
         """Проверка записей у тех кто подписан."""
         post = Post.objects.create(
             author=self.post_author,
-            text='Подпишись на меня')
+            text='Подпишись на меня'
+        )
         Follow.objects.create(
             user=self.post_follower,
-            author=self.post_author)
-        response = self.author_client.get(
-            reverse('posts:follow_index'))
+            author=self.post_author
+        )
+        response = self.author_client.get(reverse(
+            'posts:follow_index'
+        ))
         self.assertIn(post, response.context['page_obj'].object_list)
 
     def test_notfollow_on_authors(self):
         """Проверка записей у тех кто не подписан."""
         post = Post.objects.create(
             author=self.post_author,
-            text='Подпишись на меня')
-        response = self.author_client.get(
-            reverse('posts:follow_index'))
+            text='Подпишись на меня'
+        )
+        response = self.author_client.get(reverse(
+            'posts:follow_index'
+        ))
         self.assertNotIn(post, response.context['page_obj'].object_list)
