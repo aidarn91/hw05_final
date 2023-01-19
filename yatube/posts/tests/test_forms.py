@@ -1,6 +1,5 @@
 import shutil
 import tempfile
-from http import HTTPStatus
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
@@ -8,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 from django.urls import reverse
 
-from posts.models import Group, Post, Comment
+from posts.models import Comment, Group, Post
 from posts.forms import PostForm, CommentForm
 
 
@@ -45,7 +44,7 @@ class PostFormTests(TestCase):
     def test_create_post(self):
         """При отправке поста с картинкой через форму
         PostForm создаётся запись в базе данных"""
-        posts_before = Post.objects.count()
+        posts_count = Post.objects.count()
         small_gif = (
             b'\x47\x49\x46\x38\x39\x61\x02\x00'
             b'\x01\x00\x80\x00\x00\x00\x00\x00'
@@ -64,24 +63,22 @@ class PostFormTests(TestCase):
             'text': 'test_post',
             'image': uploaded,
         }
-        posts_before = Post.objects.count()
         response = self.authorized_client.post(
             reverse('posts:post_create'),
             data=form_data,
             follow=True
         )
 
-        self.assertTrue(
-            Post.objects.filter(
-                group=form_data['group'],
-                text=form_data['text'],
-            ).exists()
+        self.assertRedirects(
+            response, reverse(
+                'posts:profile',
+                kwargs={'username': self.author.username})
         )
-        self.assertEqual(response.status_code, HTTPStatus.OK)
-        self.assertEqual(Post.objects.count(), posts_before + 1)
-        self.assertRedirects(response, reverse(
-            'posts:profile', args=[self.author.username]
-        ))
+        self.assertEqual(Post.objects.count(), posts_count + 1)
+        post = Post.objects.latest('id')
+        self.assertEqual(post.text, form_data['text'])
+        self.assertEqual(post.author, self.author)
+        self.assertEqual(post.group_id, form_data['group'])
 
     def test_edit_post(self):
         form_data = {
@@ -141,29 +138,25 @@ class CommentFormTests(TestCase):
         self.authorized_client.force_login(self.user)
 
     def test_authorized_client_create_comment(self):
-        comment_count = Comment.objects.count()
+        comments_count = Comment.objects.count()
         comment_text = 'Новый комментарий'
         form_data = {
             'text': comment_text,
         }
-        response = self.authorized_client.post(
-            reverse('posts:add_comment',
-                    args=[self.post.id, ]),
+        response = self.authorized_client.post(reverse(
+            'posts:add_comment', args=[self.post.id]),
             data=form_data,
             follow=True,
         )
-        self.assertRedirects(response, reverse('posts:post_detail',
-                                               args=[self.post.id]))
-        self.assertEqual(Comment.objects.count(), comment_count + 1)
-        self.assertTrue(
-            Comment.objects.filter(
-                text=comment_text,
-            ).exists()
-        )
-        response = self.authorized_client.get(
-            reverse('posts:post_detail',
-                    args=[self.post.id])).context['comments'][1]
-        self.assertEqual(comment_text, response.text)
+        comment = Comment.objects.latest('id')
+        self.assertEqual(Comment.objects.count(), comments_count + 1)
+        self.assertEqual(comment.text, form_data['text'])
+        self.assertEqual(comment.author, self.user)
+        self.assertEqual(comment.post_id, self.post.id)
+        self.assertRedirects(response, reverse(
+            'posts:post_detail',
+            args={self.post.id}
+        ))
 
     def test_guest_client_cant_create_comment(self):
         comment_count = Comment.objects.count()
@@ -178,8 +171,8 @@ class CommentFormTests(TestCase):
             data=form_data,
             follow=True,
         )
-        self.assertRedirects(response,
-                             '/auth/login/?next=%2Fposts%2F1%2Fcomment%2F')
+        self.assertRedirects(
+            response, '/auth/login/?next=%2Fposts%2F1%2Fcomment%2F')
         self.assertEqual(Comment.objects.count(), comment_count)
         self.assertFalse(
             Comment.objects.filter(

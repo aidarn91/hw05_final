@@ -165,14 +165,14 @@ class PostPaginatorTests(TestCase):
             slug='test_slug1',
             description='Тестовое описание1',
         )
-        cls.posts = [
-            Post(
+        cls.posts = []
+        for i in range(13):
+            cls.posts.append(Post(
+                text=f'Тестовый пост {i}',
                 author=cls.user,
-                text=f'Тестовый пост {post_number}',
-                group=cls.group,
+                group=cls.group
             )
-            for post_number in range(13)
-        ]
+            )
         Post.objects.bulk_create(cls.posts)
 
         cls.paginator_list = {
@@ -277,10 +277,10 @@ class FollowViewsTest(TestCase):
             'posts:profile_unfollow',
             kwargs={'username': self.post_follower}
         ))
-        self.assertIs(Follow.objects.filter(
+        self.assertFalse(Follow.objects.filter(
             user=self.post_author,
             author=self.post_follower
-        ).exists(), False
+        ).exists()
         )
 
     def test_follow_on_authors(self):
