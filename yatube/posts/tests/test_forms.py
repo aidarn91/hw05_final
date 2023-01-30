@@ -72,10 +72,11 @@ class PostFormTests(TestCase):
         self.assertRedirects(
             response, reverse(
                 'posts:profile',
-                kwargs={'username': self.author.username})
+                kwargs={'username': self.author.username}
+            )
         )
         self.assertEqual(Post.objects.count(), posts_count + 1)
-        post = Post.objects.latest('id')
+        post = Post.objects.latest('pub_date')
         self.assertEqual(post.text, form_data['text'])
         self.assertEqual(post.author, self.author)
         self.assertEqual(post.group_id, form_data['group'])
@@ -143,8 +144,10 @@ class CommentFormTests(TestCase):
         form_data = {
             'text': comment_text,
         }
-        response = self.authorized_client.post(reverse(
-            'posts:add_comment', args=[self.post.id]),
+        response = self.authorized_client.post(
+            reverse(
+                'posts:add_comment', args=[self.post.id]
+            ),
             data=form_data,
             follow=True,
         )
@@ -155,7 +158,7 @@ class CommentFormTests(TestCase):
         self.assertEqual(comment.post_id, self.post.id)
         self.assertRedirects(response, reverse(
             'posts:post_detail',
-            args={self.post.id}
+            kwargs={'post_id': self.post.id}
         ))
 
     def test_guest_client_cant_create_comment(self):

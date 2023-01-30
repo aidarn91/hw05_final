@@ -143,9 +143,12 @@ class PostPagesTests(TestCase):
 
     def test_detail_page_show_correct_context(self):
         """Шаблон post_detail.html сформирован с правильным контекстом."""
-        response = self.authorized_client.get(reverse(
-            'posts:post_detail', kwargs={'post_id': self.post.id}
-        ))
+        response = self.authorized_client.get(
+            reverse(
+                'posts:post_detail',
+                kwargs={'post_id': self.post.id}
+            )
+        )
         first_object = response.context['post']
         post_author_0 = first_object.author.username
         post_text_0 = first_object.text
@@ -165,15 +168,13 @@ class PostPaginatorTests(TestCase):
             slug='test_slug1',
             description='Тестовое описание1',
         )
-        cls.posts = []
-        for i in range(13):
-            cls.posts.append(Post(
-                text=f'Тестовый пост {i}',
+        number_of_posts = 13
+        for post in range(number_of_posts):
+            Post.objects.create(
+                text='Текст',
                 author=cls.user,
                 group=cls.group
             )
-            )
-        Post.objects.bulk_create(cls.posts)
 
         cls.paginator_list = {
             'posts:index': reverse('posts:index'),
@@ -280,8 +281,7 @@ class FollowViewsTest(TestCase):
         self.assertFalse(Follow.objects.filter(
             user=self.post_author,
             author=self.post_follower
-        ).exists()
-        )
+        ).exists())
 
     def test_follow_on_authors(self):
         """Проверка записей у тех кто подписан."""
